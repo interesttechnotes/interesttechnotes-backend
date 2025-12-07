@@ -60,6 +60,8 @@ export const login = async (req, res) => {
   }
 };
 export const googleAuth = async (req, res) => {
+  console.log("login with google");
+  
   const { code } = req.body;
 
   if (!code) {
