@@ -155,12 +155,18 @@ export const verifyPayment = async (req, res) => {
       }
     } else {
       console.warn("⚠️ Missing fileId or userEmail — skipping Google Drive share");
+      return res.json({
+        success: true,
+        message:
+          "Payment verified successfully ✅ but missing file/user details for sharing",
+        order: updatedOrder,
+      });
     }
 
     // 4️⃣ Response
     return res.json({
       success: true,
-      message: "Payment verified successfully ✅",
+      message: "Payment verified successfully ✅ check your email for access",
       order: updatedOrder,
     });
   } catch (error) {
