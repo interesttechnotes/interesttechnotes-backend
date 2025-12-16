@@ -6,39 +6,45 @@ const KEYFILEPATH = path.resolve("service-account.json");
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 
 const getDriveClient = () => {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: KEYFILEPATH,
-    scopes: SCOPES,
-  });
-  return google.drive({ version: "v3", auth });
+    const auth = new google.auth.GoogleAuth({
+        keyFile: KEYFILEPATH,
+        scopes: SCOPES,
+    });
+    return google.drive({ version: "v3", auth });
 };
 
 export const getFilesInFolder = async (folderId) => {
-  try {
-    console.log("getFilesInFolder", folderId);
-    
-    const drive = getDriveClient();
+    try {
+        console.log("getFilesInFolder", folderId);
 
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed=false`,
-      fields: "files(id, name, mimeType)"
-    });
+        const drive = getDriveClient();
 
-    const files = res.data.files || [];
+        const res = await drive.files.list({
+            q: `'${folderId}' in parents and trashed=false`,
+            // fields: "files(id, name, mimeType,description,)"
+            fields: "files(id,name,mimeType,description,size,createdTime,modifiedTime,viewedByMeTime,owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),permissions(type,role,emailAddress),shared,parents,quotaBytesUsed)"
 
-    // return clean payload
-    return files.map(file => ({
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      url: `https://drive.google.com/uc?export=view&id=${file.id}`,
-      amount: 10,               // ⭐ your custom field
-    }));
+            
+        });
 
-  } catch (err) {
-    console.error("Error fetching files:", err.message);
-    return [];
-  }
+        const files = res.data.files || [];
+
+        
+        // return clean payload
+        return files.map(file => ({
+            id: file.id,
+            name: file.name,
+            mimeType: file.mimeType,
+            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
+            amount: 10,               // ⭐ your custom field
+            wholeFileObject: file,
+            actualResData: res.data
+        }));
+
+    } catch (err) {
+        console.error("Error fetching files:", err.message);
+        return [];
+    }
 };
 
 // import { google } from "googleapis";

@@ -11,6 +11,14 @@ const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
+const parseDescription = (desc) => {
+  try {
+    return desc ? JSON.parse(desc) : {};
+  } catch {
+    return {};
+  }
+};
+
 
 export const createOrder = async (req, res) => {
   try {
@@ -31,9 +39,15 @@ export const createOrder = async (req, res) => {
     if (!file) {
       return res.status(404).json({ message: "File not found in Google Drive" });
     }
+    // 2️⃣ File Price (from description → fallback)
+    const meta = parseDescription(file.description);
 
+    const amount =
+      typeof meta.price === "number" && meta.price > 0
+        ? meta.price
+        : 10; // fallback price
     // 2️⃣ File Price (static for now)
-    const amount = 10; // ₹10
+    // const amount = 10; // ₹10
 
     // 3️⃣ Create Razorpay Order
     const options = {
