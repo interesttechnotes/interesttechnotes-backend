@@ -9,10 +9,13 @@ import fileRoutes from "./routes/files.routes.js";
 // import orderRoutes from "./routes/order.routes.js";
 
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
+
 
 dotenv.config(); // Load env variables
 
 const app = express();
+app.use(cookieParser());
 
 // Middleware
 app.use(express.json());

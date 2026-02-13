@@ -2,6 +2,8 @@ import { User } from "../models/User.model.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { handleGoogleAuth } from "../services/auth.service.js";
+import { sendOtpEmail } from "../services/email.service.js";
+import { randomInt } from "crypto";
 
 // Helper: generate JWT token
 const generateToken = (user) => {
@@ -80,5 +82,166 @@ export const googleAuth = async (req, res) => {
       success: false,
       error: error.message || "Google authentication failed",
     });
+  }
+};
+export const requestOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Optional: auto-create user (remove this block if you don't want auto signup)
+      user = await User.create({
+        email,
+        provider: "local",
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = randomInt(100000, 999999).toString();
+
+    user.otp = {
+      code: otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+    };
+
+    await user.save();
+
+    await sendOtpEmail(email, otp);
+
+    return res.json({ message: "OTP sent successfully ✅" });
+
+  } catch (error) {
+    console.error("Request OTP Error:", error);
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
+};
+
+export const requestOtp2 = async (req, res) => {
+  try {
+    console.log("--otp request--");
+    
+    const { email } = req.body;
+    console.log("--otp request--",email);
+    
+    let user = await User.findOne({ email });
+    
+    console.log("--otp request--",user);
+    if (!user) {
+      // Optional: auto create user if not exists
+      user = await User.create({ email });
+    }
+    console.log("--otp request--2",user);
+
+    // Generate 6 digit OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+
+    user.otp = {
+      code: otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+    };
+
+    await user.save();
+
+    await sendOtpEmail(email, otp);
+
+    return res.json({ message: "OTP sent successfully ✅" });
+  } catch (error) {
+    console.error("Request OTP Error:", error);
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
+};
+export const verifyOtp2 = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+if (!email || !otp) {
+  return res.status(400).json({ message: "Email and OTP are required" });
+}
+
+    const user = await User.findOne({ email });
+
+    if (!user || !user.otp?.code) {
+      return res.status(400).json({ message: "OTP not requested" });
+    }
+
+    if (user.otp.code !== otp) {
+      return res.status(400).json({ message: "Invalid OTP ❌" });
+    }
+
+    if (user.otp.expiresAt < new Date()) {
+      return res.status(400).json({ message: "OTP expired ⏳" });
+    }
+
+    // Clear OTP after successful verification
+    user.otp = undefined;
+    await user.save();
+
+    const token = generateToken(user);
+
+    return res.json({
+      message: "Login successful ✅",
+      user: { id: user._id, email: user.email },
+      token,
+    });
+  } catch (error) {
+    console.error("Verify OTP Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+console.log("--verify,email",email,otp);
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user || !user.otp?.code) {
+      return res.status(400).json({ message: "OTP not requested" });
+    }
+
+    if (user.otp.expiresAt < new Date()) {
+      return res.status(400).json({ message: "OTP expired ⏳" });
+    }
+
+    // const isValid = await bcrypt.compare(otp, user.otp.code);
+    if (user.otp.code !== otp) {
+  return res.status(400).json({ message: "Invalid OTP ❌" });
+}
+
+
+    // if (!isValid) {
+    //   return res.status(400).json({ message: "Invalid OTP ❌" });
+    // }
+
+    // Clear OTP
+    user.otp = undefined;
+    await user.save();
+
+    const token = generateToken(user);
+res.cookie("token_itn", token, {
+  httpOnly: true,                 // prevents JS access (XSS protection)
+  secure: process.env.NODE_ENV === "production", 
+  sameSite: "strict",             // CSRF protection
+  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+});
+    return res.json({
+      message: "Login successful ✅",
+      user: { id: user._id, email: user.email },
+      token,
+    });
+
+  } catch (error) {
+    console.error("Verify OTP Error:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
