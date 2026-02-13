@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import path from "path";
 import fs from "fs";
+import { sendFolderShareEmail } from "../services/email.service";
 
 const KEYFILEPATH = path.resolve("service-account.json");
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -36,10 +37,15 @@ export const shareFolderWithUser = async (folderId, email) => {
         emailAddress: email,
       },
       sendNotificationEmail: true,
+        emailMessage: "Hi, I’ve shared the project folder with you. Please review it."
+
     });
 
     console.log(`✅ Folder shared successfully!`);
     console.log(`📤 Google API Response:`, JSON.stringify(response.data, null, 2));
+
+    await sendFolderShareEmail(email, folderId);
+
 
   } catch (err) {
     // 🧠 Handle common Google Drive API errors more clearly

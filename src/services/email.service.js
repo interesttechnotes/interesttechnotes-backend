@@ -52,3 +52,39 @@ export const sendOtpEmail = async (email, otp) => {
         throw error;
     }
 };
+
+
+/* ==============================
+   ✅ FOLDER SHARE EMAIL
+================================= */
+export const sendFolderShareEmail = async (email, folderId) => {
+    try {
+        const folderLink = `https://drive.google.com/drive/folders/${folderId}`;
+
+        const response = await resend.emails.send({
+            from: process.env.DOMAIN_EMAIL,
+            to: email,
+            subject: "A Folder Has Been Shared With You",
+            html: `
+        <h2>📁 Folder Access Granted</h2>
+        <p>You have been granted access to a Google Drive folder.</p>
+        
+        <p>
+          <a href="${folderLink}" 
+             style="background:#4f46e5;color:white;padding:10px 16px;
+             text-decoration:none;border-radius:6px;">
+            Open Folder
+          </a>
+        </p>
+
+        <p>If the button doesn't work, copy and paste this link:</p>
+        <p>${folderLink}</p>
+      `,
+        });
+
+        console.log("Folder Share Email sent:", response);
+    } catch (error) {
+        console.error("Resend Folder Email Error:", error);
+        throw error;
+    }
+};
