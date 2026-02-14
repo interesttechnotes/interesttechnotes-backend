@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import path from "path";
 import fs from "fs";
-import { sendFolderShareEmail } from "../services/email.service";
+import { sendFolderShareEmail } from "../services/email.service.js";
 
 const KEYFILEPATH = path.resolve("service-account.json");
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
