@@ -59,6 +59,8 @@ export const sendOtpEmail = async (email, otp) => {
 ================================= */
 export const sendFolderShareEmail = async (email, folderId) => {
     try {
+        console.log("--cuntom-mail-share-folder--");
+        
         const folderLink = `https://drive.google.com/drive/folders/${folderId}`;
 
         const response = await resend.emails.send({
