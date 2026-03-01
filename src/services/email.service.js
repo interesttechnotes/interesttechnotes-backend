@@ -37,7 +37,7 @@ export const sendOtpEmail = async (email, otp) => {
         const response = await resend.emails.send({
             from: process.env.DOMAIN_EMAIL, // temporary test sender
             to: email,
-            subject: "Your OTP Code",
+            subject: `Your OTP Code is ${otp} expire in 5 min`,
             html: `
         <h2>Your OTP Code</h2>
         <p>Your OTP is:</p>
