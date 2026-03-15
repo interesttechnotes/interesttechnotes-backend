@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import productRoutes from "./routes/product.routes.js";
 import fileRoutes from "./routes/files.routes.js";
+import contactRoutes from "./routes/contact.routes.js";
 // import addressRoutes from "./routes/address.routes.js";
 // import orderRoutes from "./routes/order.routes.js";
 
@@ -41,7 +42,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/products", fileRoutes);
 // app.use("/api/address", addressRoutes);
 // app.use("/api/orders", orderRoutes);
-
+app.use("/api/contact", contactRoutes);
 app.get("/", (req, res) => {
   res.send("Backend is running ✅");
 });
