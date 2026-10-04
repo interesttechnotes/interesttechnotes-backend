@@ -19,7 +19,6 @@ const parseDescription = (desc) => {
   }
 };
 
-
 export const createOrder = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -37,15 +36,15 @@ export const createOrder = async (req, res) => {
     console.log("Google Drive File:", file);
 
     if (!file) {
-      return res.status(404).json({ message: "File not found in Google Drive" });
+      return res
+        .status(404)
+        .json({ message: "File not found in Google Drive" });
     }
     // 2️⃣ File Price (from description → fallback)
     const meta = parseDescription(file.description);
 
     const amount =
-      typeof meta.price === "number" && meta.price > 0
-        ? meta.price
-        : 10; // fallback price
+      typeof meta.price === "number" && meta.price > 0 ? meta.price : 10; // fallback price
     // 2️⃣ File Price (static for now)
     // const amount = 10; // ₹10
 
@@ -135,7 +134,7 @@ export const verifyPayment = async (req, res) => {
           paidAt: new Date(),
         },
       },
-      { new: true }
+      { new: true },
     ).populate("user");
 
     if (!updatedOrder) {
@@ -154,7 +153,9 @@ export const verifyPayment = async (req, res) => {
         console.warn("⚠️ Google Drive share failed:", shareError.message);
       }
     } else {
-      console.warn("⚠️ Missing fileId or userEmail — skipping Google Drive share");
+      console.warn(
+        "⚠️ Missing fileId or userEmail — skipping Google Drive share",
+      );
     }
 
     // 4️⃣ Response
@@ -168,7 +169,6 @@ export const verifyPayment = async (req, res) => {
     return res.status(500).json({ message: "Server Error" });
   }
 };
-
 
 // export const createOrder = async (req, res) => {
 //   try {
@@ -215,8 +215,6 @@ export const verifyPayment = async (req, res) => {
 //   }
 // };
 
-
-
 // export const verifyPayment = async (req, res) => {
 //   try {
 //     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
@@ -255,7 +253,6 @@ export const verifyPayment = async (req, res) => {
 //     res.status(500).json({ message: "Server Error" });
 //   }
 // };
-
 
 // ✅ Create Razorpay Order
 // export const createOrder = async (req, res) => {
@@ -399,4 +396,3 @@ export const verifyPayment = async (req, res) => {
 //     res.status(500).json({ message: "Server Error" });
 //   }
 // };
-

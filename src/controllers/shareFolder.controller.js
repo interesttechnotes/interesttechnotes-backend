@@ -37,16 +37,17 @@ export const shareFolderWithUser = async (folderId, email) => {
         emailAddress: email,
       },
       sendNotificationEmail: true,
-        emailMessage: "Hi, I’ve shared the project folder with you. Please review it."
-
+      emailMessage:
+        "Hi, I’ve shared the project folder with you. Please review it.",
     });
 
     console.log(`✅ Folder shared successfully!`);
-    console.log(`📤 Google API Response:`, JSON.stringify(response.data, null, 2));
+    console.log(
+      `📤 Google API Response:`,
+      JSON.stringify(response.data, null, 2),
+    );
 
     await sendFolderShareEmail(email, folderId);
-
-
   } catch (err) {
     // 🧠 Handle common Google Drive API errors more clearly
     console.error("❌ Error sharing folder:");
@@ -61,16 +62,20 @@ export const shareFolderWithUser = async (folderId, email) => {
     }
 
     if (err.code === 404) {
-      console.error("🚫 File not found — check if the service account has access to the folder.");
+      console.error(
+        "🚫 File not found — check if the service account has access to the folder.",
+      );
     } else if (err.code === 403) {
-      console.error("🔒 Permission denied — verify the service account has at least 'Editor' access.");
+      console.error(
+        "🔒 Permission denied — verify the service account has at least 'Editor' access.",
+      );
     } else if (err.code === 400) {
       console.error("⚠️ Bad request — check folderId or email formatting.");
     }
 
     // You can throw a more descriptive error for upstream handling
     throw new Error(
-      `Failed to share folder (${folderId}) with ${email}: ${err.message}`
+      `Failed to share folder (${folderId}) with ${email}: ${err.message}`,
     );
   }
 };
