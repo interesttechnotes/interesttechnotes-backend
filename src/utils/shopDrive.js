@@ -26,3 +26,29 @@ export const getLatestFiles = async (credentials, limit = 5) => {
     wholeFileObject: file,
   }));
 };
+
+// Fetch ONE file's details using a specific shop's credentials.
+// Returns null if the file doesn't exist or this shop can't access it.
+export const getFileWithCredentials = async (credentials, fileId) => {
+  try {
+    const auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
+    const drive = google.drive({ version: "v3", auth });
+
+    const { data: file } = await drive.files.get({
+      fileId,
+      fields: "id,name,mimeType,description,size,createdTime,modifiedTime",
+    });
+
+    return {
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      description: file.description,
+      url: `https://drive.google.com/uc?export=view&id=${file.id}`,
+      wholeFileObject: file,
+    };
+  } catch (err) {
+    console.error("Error fetching file by ID:", err.message);
+    return null;
+  }
+};

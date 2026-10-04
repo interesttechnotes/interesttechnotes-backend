@@ -1,81 +1,59 @@
 import { google } from "googleapis";
-import path from "path";
-import fs from "fs";
 import { sendFolderShareEmail } from "../services/email.service.js";
 
-const KEYFILEPATH = path.resolve("service-account.json");
+// Sharing needs write access to permissions, so the full Drive scope is used
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 
 /**
- * Shares a Google Drive folder with a specified user.
- * @param {string} folderId - The Google Drive folder ID.
- * @param {string} email - The email of the user to share with.
+ * Shares a Drive file/folder with a user, using the credentials of the SHOP
+ * that owns it (not a single global service-account.json).
+ *
+ * @param {object} credentials - the shop's service-account JSON (parsed object)
+ * @param {string} fileId      - Drive file or folder id
+ * @param {string} email       - buyer's email
+ * @param {string} [fileName]  - used in the custom email
  */
-export const shareFolderWithUser = async (folderId, email) => {
+export const shareFolderWithUser = async (
+  credentials,
+  fileId,
+  email,
+  fileName,
+) => {
+  const auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
+  const drive = google.drive({ version: "v3", auth });
+
+  // 1) Grant access. If this fails the whole share failed, so we throw.
   try {
-    // 🔍 Check if key file exists
-    if (!fs.existsSync(KEYFILEPATH)) {
-      throw new Error(`Missing service account key file: ${KEYFILEPATH}`);
-    }
+    console.log(`📁 Sharing ${fileId} with ${email}`);
 
-    // 🔐 Authenticate
-    const auth = new google.auth.GoogleAuth({
-      keyFile: KEYFILEPATH,
-      scopes: SCOPES,
+    await drive.permissions.create({
+      fileId,
+      requestBody: { type: "user", role: "reader", emailAddress: email },
+      sendNotificationEmail: true, // Google's own invite email
+      emailMessage: "Thanks for your purchase. Your file is ready to view.",
     });
 
-    const drive = google.drive({ version: "v3", auth });
-
-    console.log(`📁 Attempting to share folder: ${folderId} with ${email}`);
-
-    // 🧩 Try sharing the folder
-    const response = await drive.permissions.create({
-      fileId: folderId,
-      resource: {
-        type: "user",
-        role: "reader", // or "writer"
-        emailAddress: email,
-      },
-      sendNotificationEmail: true,
-      emailMessage:
-        "Hi, I’ve shared the project folder with you. Please review it.",
-    });
-
-    console.log(`✅ Folder shared successfully!`);
-    console.log(
-      `📤 Google API Response:`,
-      JSON.stringify(response.data, null, 2),
-    );
-
-    await sendFolderShareEmail(email, folderId);
+    console.log("✅ Drive permission created");
   } catch (err) {
-    // 🧠 Handle common Google Drive API errors more clearly
-    console.error("❌ Error sharing folder:");
-    console.error(`   → Message: ${err.message}`);
-    console.error(`   → Folder ID: ${folderId}`);
-    console.error(`   → Email: ${email}`);
-
-    if (err.errors && Array.isArray(err.errors)) {
-      for (const e of err.errors) {
-        console.error(`   → Google Error: [${e.reason}] ${e.message}`);
-      }
-    }
-
+    const reasons = (err.errors || []).map((e) => e.reason).join(", ");
+    console.error(
+      `❌ Drive share failed (file ${fileId}, ${email}): ${err.message} ${reasons}`,
+    );
     if (err.code === 404) {
-      console.error(
-        "🚫 File not found — check if the service account has access to the folder.",
-      );
+      console.error("   → This shop's service account can't see the file.");
     } else if (err.code === 403) {
       console.error(
-        "🔒 Permission denied — verify the service account has at least 'Editor' access.",
+        "   → Service account needs Editor access to the file/folder.",
       );
-    } else if (err.code === 400) {
-      console.error("⚠️ Bad request — check folderId or email formatting.");
     }
+    throw new Error(`Failed to share ${fileId}: ${err.message}`);
+  }
 
-    // You can throw a more descriptive error for upstream handling
-    throw new Error(
-      `Failed to share folder (${folderId}) with ${email}: ${err.message}`,
-    );
+  // 2) Custom email via Resend. The share already worked, so a failure here
+  //    is logged but never reported as "share failed".
+  try {
+    await sendFolderShareEmail(email, fileId, fileName);
+  } catch (err) {
+    console.warn("⚠️ Custom share email failed:", err.message);
   }
 };

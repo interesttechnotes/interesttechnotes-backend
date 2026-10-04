@@ -56,38 +56,53 @@ export const sendOtpEmail = async (email, otp) => {
 /* ==============================
    ✅ FOLDER SHARE EMAIL
 ================================= */
-export const sendFolderShareEmail = async (email, folderId) => {
-  try {
-    console.log("--cuntom-mail-share-folder--");
+// Replace the existing sendFolderShareEmail in services/email.service.js
+// with this one. `resend` is already defined at the top of that file.
 
-    const folderLink = `https://drive.google.com/drive/folders/${folderId}`;
+const escapeHtml = (s) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
 
-    const response = await resend.emails.send({
-      from: process.env.DOMAIN_EMAIL,
-      to: email,
-      subject: "A Folder Has Been Shared With You",
-      html: `
-        <h2>📁 Folder Access Granted</h2>
-        <p>You have been granted access to a Google Drive folder.</p>
-        
-        <p>
-          <a href="${folderLink}" 
-             style="background:#4f46e5;color:white;padding:10px 16px;
-             text-decoration:none;border-radius:6px;">
-            Open Folder
-          </a>
-        </p>
+export const sendFolderShareEmail = async (
+  email,
+  fileId,
+  fileName = "your file",
+) => {
+  // /open?id= works for both files and folders
+  const link = `https://drive.google.com/open?id=${fileId}`;
 
-        <p>If the button doesn't work, copy and paste this link:</p>
-        <p>${folderLink}</p>
-      `,
-    });
+  // Resend's SDK does NOT throw on API errors. It returns { data, error },
+  // so the error has to be checked explicitly.
+  const { data, error } = await resend.emails.send({
+    from: process.env.DOMAIN_EMAIL, // e.g. "Interest Tech Notes <noreply@yourdomain.com>"
+    to: email,
+    subject: `Access granted: ${fileName}`,
+    html: `
+      <h2>Access granted</h2>
+      <p>Thanks for your purchase. You now have access to <b>${escapeHtml(fileName)}</b> on Google Drive.</p>
+      <p>
+        <a href="${link}"
+           style="background:#4f46e5;color:white;padding:10px 16px;
+           text-decoration:none;border-radius:6px;">
+          Open in Google Drive
+        </a>
+      </p>
+      <p>If the button doesn't work, copy and paste this link:</p>
+      <p>${link}</p>
+    `,
+  });
 
-    console.log("Folder Share Email sent:", response);
-  } catch (error) {
-    console.error("Resend Folder Email Error:", error);
-    throw error;
+  if (error) {
+    console.error("Resend error:", error);
+    throw new Error(error.message || "Resend failed to send email");
   }
+
+  console.log("Share email sent, id:", data?.id);
 };
 /* ==============================
    ✅ CONTACT US EMAIL

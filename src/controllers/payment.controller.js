@@ -1,16 +1,15 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { Product } from "../models/Product.model.js";
 import { Order } from "../models/Order.model.js";
-import { User } from "../models/User.model.js";
 import { shareFolderWithUser } from "./shareFolder.controller.js";
-import { getFilesInFolder } from "../utils/googleDrive.js";
-import { getFileById } from "../services/googleDrive.service.js";
+import { getFileWithCredentials } from "../utils/shopDrive.js";
+import { getShopCredentials } from "../services/shop.service.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
+
 const parseDescription = (desc) => {
   try {
     return desc ? JSON.parse(desc) : {};
@@ -23,52 +22,47 @@ export const createOrder = async (req, res) => {
   try {
     const userId = req.user.id;
     const { productId } = req.body;
+    const shopId = Number(req.body.shopId);
 
-    if (!productId) {
-      return res.status(400).json({ message: "productId is required" });
-    }
-
-    console.log("Incoming productId:", productId, "User:", req.user);
-
-    // 1️⃣ Fetch file from Google Drive
-    const file = await getFileById(productId);
-
-    console.log("Google Drive File:", file);
-
-    if (!file) {
+    if (!productId || !Number.isInteger(shopId) || shopId < 1) {
       return res
-        .status(404)
-        .json({ message: "File not found in Google Drive" });
+        .status(400)
+        .json({ message: "productId and shopId are required" });
     }
-    // 2️⃣ File Price (from description → fallback)
+
+    // 1️⃣ Load the shop and use ITS Drive credentials
+    const shop = await getShopCredentials(shopId);
+    if (!shop) {
+      return res.status(404).json({ message: "Shop not found" });
+    }
+
+    // 2️⃣ Fetch the file from that shop's Drive
+    const file = await getFileWithCredentials(
+      shop.google_drive_json,
+      productId,
+    );
+    if (!file) {
+      return res.status(404).json({ message: "File not found in this shop" });
+    }
+
+    // 3️⃣ Price from the file description JSON, fallback ₹10
     const meta = parseDescription(file.description);
-
     const amount =
-      typeof meta.price === "number" && meta.price > 0 ? meta.price : 10; // fallback price
-    // 2️⃣ File Price (static for now)
-    // const amount = 10; // ₹10
+      typeof meta.price === "number" && meta.price > 0 ? meta.price : 10;
 
-    // 3️⃣ Create Razorpay Order
-    const options = {
+    // 4️⃣ Razorpay order (shopId kept in notes for reference)
+    const razorpayOrder = await razorpay.orders.create({
       amount: amount * 100, // ₹ → paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
-      notes: {
-        fileId: file.id,
-        fileName: file.name,
-      },
-    };
+      notes: { fileId: file.id, fileName: file.name, shopId: String(shop.id) },
+    });
 
-    const razorpayOrder = await razorpay.orders.create(options);
-
-    // 4️⃣ Save order in MongoDB
+    // 5️⃣ Save order in MongoDB (needs `shopId` in the Order schema)
     const newOrder = await Order.create({
       user: userId,
-      file: {
-        id: file.id,
-        name: file.name,
-        url: file.url,
-      },
+      shopId: shop.id,
+      file: { id: file.id, name: file.name, url: file.url },
       amount,
       paymentMethod: "razorpay",
       razorpayOrderId: razorpayOrder.id,
@@ -76,7 +70,6 @@ export const createOrder = async (req, res) => {
       isPaid: false,
     });
 
-    // 5️⃣ Respond with Razorpay order + db orderId
     res.status(201).json({
       message: "Razorpay order created successfully",
       razorpayOrder,
@@ -110,7 +103,7 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Missing payment details" });
     }
 
-    // 1️⃣ Verify Razorpay Signature
+    // 1️⃣ Verify Razorpay signature
     const generatedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -122,9 +115,15 @@ export const verifyPayment = async (req, res) => {
         .json({ success: false, message: "Invalid Razorpay signature ❌" });
     }
 
-    // 2️⃣ Update order as paid
-    const updatedOrder = await Order.findByIdAndUpdate(
-      orderId,
+    // 2️⃣ Mark paid. The filter ties the payment to THIS order and THIS user,
+    //    and isPaid:false stops it being processed (and shared) twice.
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        _id: orderId,
+        razorpayOrderId: razorpay_order_id,
+        user: req.user.id,
+        isPaid: false,
+      },
       {
         isPaid: true,
         orderStatus: "completed",
@@ -135,33 +134,48 @@ export const verifyPayment = async (req, res) => {
         },
       },
       { new: true },
-    ).populate("user");
+    ).populate("user", "email");
 
     if (!updatedOrder) {
-      return res.status(404).json({ message: "Order not found" });
+      return res
+        .status(404)
+        .json({ message: "Order not found or already processed" });
     }
 
-    // 3️⃣ Auto-share Google Drive file with user (optional)
+    // 3️⃣ Auto-share the file using the owning shop's credentials
     const fileId = updatedOrder.file?.id;
     const userEmail = updatedOrder.user?.email;
+    let shared = false;
 
-    if (fileId && userEmail) {
+    if (fileId && userEmail && updatedOrder.shopId) {
       try {
-        await shareFolderWithUser(fileId, userEmail);
-        console.log(`✅ File shared: ${fileId} with ${userEmail}`);
+        const shop = await getShopCredentials(updatedOrder.shopId);
+        if (!shop) throw new Error(`Shop ${updatedOrder.shopId} not found`);
+
+        await shareFolderWithUser(
+          shop.google_drive_json,
+          fileId,
+          userEmail,
+          updatedOrder.file?.name,
+        );
+        shared = true;
+        console.log(`✅ File ${fileId} shared with ${userEmail}`);
       } catch (shareError) {
         console.warn("⚠️ Google Drive share failed:", shareError.message);
       }
     } else {
       console.warn(
-        "⚠️ Missing fileId or userEmail — skipping Google Drive share",
+        `⚠️ Skipping share for order ${orderId}: missing fileId, email or shopId`,
       );
     }
 
     // 4️⃣ Response
     return res.json({
       success: true,
-      message: "Payment verified successfully ✅",
+      shared,
+      message: shared
+        ? "Payment verified successfully ✅ Check your email for access."
+        : "Payment verified ✅ but we couldn't share the file automatically. Please contact support.",
       order: updatedOrder,
     });
   } catch (error) {

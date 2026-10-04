@@ -8,6 +8,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
+    // 🏪 Shop that owns the purchased file (id from the Postgres shops table)
+shopId: {
+  type: Number,
+  required: true,
+},
+
     // 🔥 File purchased (from Google Drive)
     file: {
       id: { type: String, required: true },      // Google Drive file id

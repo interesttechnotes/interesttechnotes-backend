@@ -158,3 +158,14 @@ export const getStorefront = async ({ limit, productLimit }) => {
     }),
   );
 };
+
+// INTERNAL USE ONLY (payments): returns the stored Drive credentials.
+// Never send this object to the client.
+export const getShopCredentials = async (id) => {
+  await ensureTable();
+  const { rows } = await neonQuery(
+    `SELECT id, name, google_drive_json FROM shops WHERE id = $1`,
+    [id],
+  );
+  return rows[0] || null;
+};
