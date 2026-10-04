@@ -1,4 +1,5 @@
 import { neonQuery } from "../db/neonPostgresDB.js";
+import { getLatestFiles } from "../utils/shopDrive.js";
 
 // ---------- Table setup (runs once, on first use) ----------
 let tableReady = null;
@@ -43,13 +44,18 @@ const toShop = (row) =>
   };
 
 // ---------- Queries ----------
-export const createShop = async ({ ownerId, shopName, description, googleDriveJson }) => {
+export const createShop = async ({
+  ownerId,
+  shopName,
+  description,
+  googleDriveJson,
+}) => {
   await ensureTable();
   const { rows } = await neonQuery(
     `INSERT INTO shops (name, description, owner_user_id, google_drive_json)
      VALUES ($1, $2, $3, $4::jsonb)
      RETURNING ${SHOP_COLUMNS}`,
-    [shopName, description, ownerId, JSON.stringify(googleDriveJson)]
+    [shopName, description, ownerId, JSON.stringify(googleDriveJson)],
   );
   return toShop(rows[0]);
 };
@@ -60,7 +66,7 @@ export const getShopsByOwner = async (ownerId) => {
     `SELECT ${SHOP_COLUMNS} FROM shops
      WHERE owner_user_id = $1
      ORDER BY created_at DESC`,
-    [ownerId]
+    [ownerId],
   );
   return rows.map(toShop);
 };
@@ -70,13 +76,17 @@ export const getShopById = async (id, ownerId) => {
   const { rows } = await neonQuery(
     `SELECT ${SHOP_COLUMNS} FROM shops
      WHERE id = $1 AND owner_user_id = $2`,
-    [id, ownerId]
+    [id, ownerId],
   );
   return toShop(rows[0]) || null;
 };
 
 // Fields passed as null/undefined are left unchanged.
-export const updateShop = async (id, ownerId, { shopName, description, googleDriveJson }) => {
+export const updateShop = async (
+  id,
+  ownerId,
+  { shopName, description, googleDriveJson },
+) => {
   await ensureTable();
   const { rows } = await neonQuery(
     `UPDATE shops
@@ -92,7 +102,59 @@ export const updateShop = async (id, ownerId, { shopName, description, googleDri
       googleDriveJson ? JSON.stringify(googleDriveJson) : null,
       id,
       ownerId,
-    ]
+    ],
   );
   return toShop(rows[0]) || null;
+};
+
+// ---------- Storefront (public listing: shops + their latest Drive files) ----------
+const driveCache = new Map();
+const CACHE_MS = 60 * 1000; // avoid hitting Drive on every page load
+
+const getCachedFiles = async (shop, productLimit) => {
+  // updated_at in the key means editing a shop (e.g. new JSON) busts its cache
+  const key = `${shop.id}:${shop.updated_at.getTime()}:${productLimit}`;
+  const hit = driveCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.files;
+
+  const files = await getLatestFiles(shop.google_drive_json, productLimit);
+  if (driveCache.size > 200) driveCache.clear();
+  driveCache.set(key, { files, expires: Date.now() + CACHE_MS });
+  return files;
+};
+
+export const getStorefront = async ({ limit, productLimit }) => {
+  await ensureTable();
+
+  // Newest-updated shops first. The credentials are read here only to call
+  // Drive and are never included in the returned objects.
+  const { rows } = await neonQuery(
+    `SELECT id, name, description, google_drive_json, updated_at
+     FROM shops
+     ORDER BY updated_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+
+  // One Drive call per shop, in parallel. A broken shop doesn't break the page.
+  return Promise.all(
+    rows.map(async (row) => {
+      let products = [];
+      let productsError = false;
+      try {
+        products = await getCachedFiles(row, productLimit);
+      } catch (err) {
+        console.error(`❌ Drive error for shop ${row.id}:`, err.message);
+        productsError = true;
+      }
+      return {
+        id: row.id,
+        shopName: row.name,
+        description: row.description,
+        updatedAt: row.updated_at,
+        products,
+        productsError,
+      };
+    }),
+  );
 };

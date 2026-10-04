@@ -26,14 +26,15 @@ const isBlank = (v) => v === undefined || v === null || String(v).trim() === "";
 // ---------- handlers ----------
 export const createShop = async (req, res) => {
   try {
-    console.log("create shop api hit")
     const { shopName, description, googleDriveJson } = req.body;
 
     if (isBlank(shopName)) {
       return res.status(400).json({ message: "Shop name is required." });
     }
     if (isBlank(googleDriveJson)) {
-      return res.status(400).json({ message: "Google Drive JSON is required." });
+      return res
+        .status(400)
+        .json({ message: "Google Drive JSON is required." });
     }
 
     const drive = parseDriveJson(googleDriveJson);
@@ -109,5 +110,26 @@ export const updateShop = async (req, res) => {
   } catch (error) {
     console.error("❌ Update Shop Error:", error.message);
     res.status(500).json({ message: "Server error while updating shop" });
+  }
+};
+
+// Public: shops (newest updated first) with their latest Drive files.
+// GET /api/shops/storefront?limit=5&productLimit=5
+const clamp = (value, fallback, max) => {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n) || n < 1) return fallback;
+  return Math.min(n, max);
+};
+
+export const getStorefront = async (req, res) => {
+  try {
+    const limit = clamp(req.query.limit, 5, 20);
+    const productLimit = clamp(req.query.productLimit, 5, 20);
+
+    const shops = await shopService.getStorefront({ limit, productLimit });
+    res.status(200).json({ shops });
+  } catch (error) {
+    console.error("❌ Storefront Error:", error.message);
+    res.status(500).json({ message: "Server error while loading shops" });
   }
 };
