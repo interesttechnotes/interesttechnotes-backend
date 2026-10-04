@@ -1,8 +1,12 @@
 import express from "express";
 import cors from "cors";
 import { connectDB } from "./db/db.js";
+import { connectNeonDB } from "./db/neonPostgresDB.js";
 import authRoutes from "./routes/auth.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import shopRoutes from "./routes/shop.routes.js";
+// import shopRoutes from "./routes/shop.routes.js";
+
 import productRoutes from "./routes/product.routes.js";
 import fileRoutes from "./routes/files.routes.js";
 import contactRoutes from "./routes/contact.routes.js";
@@ -23,6 +27,8 @@ app.use(express.json());
 
 // Connect DB
 connectDB();
+connectNeonDB(); 
+
 
 // Allow requests from frontend
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -40,6 +46,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/payment", paymentRoutes);
 // app.use("/api/products", productRoutes);
 app.use("/api/products", fileRoutes);
+app.use("/api/shops", shopRoutes);
+
 // app.use("/api/address", addressRoutes);
 // app.use("/api/orders", orderRoutes);
 app.use("/api/contact", contactRoutes);

@@ -6,45 +6,42 @@ const KEYFILEPATH = path.resolve("service-account.json");
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 
 const getDriveClient = () => {
-    const auth = new google.auth.GoogleAuth({
-        keyFile: KEYFILEPATH,
-        scopes: SCOPES,
-    });
-    return google.drive({ version: "v3", auth });
+  const auth = new google.auth.GoogleAuth({
+    keyFile: KEYFILEPATH,
+    scopes: SCOPES,
+  });
+  return google.drive({ version: "v3", auth });
 };
 
 export const getFilesInFolder = async (folderId) => {
-    try {
-        console.log("getFilesInFolder", folderId);
+  try {
+    console.log("getFilesInFolder", folderId);
 
-        const drive = getDriveClient();
+    const drive = getDriveClient();
 
-        const res = await drive.files.list({
-            q: `'${folderId}' in parents and trashed=false`,
-            // fields: "files(id, name, mimeType,description,)"
-            fields: "files(id,name,mimeType,description,size,createdTime,modifiedTime,viewedByMeTime,owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),permissions(type,role,emailAddress),shared,parents,quotaBytesUsed)"
+    const res = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      // fields: "files(id, name, mimeType,description,)"
+      fields:
+        "files(id,name,mimeType,description,size,createdTime,modifiedTime,viewedByMeTime,owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),permissions(type,role,emailAddress),shared,parents,quotaBytesUsed)",
+    });
 
-            
-        });
+    const files = res.data.files || [];
 
-        const files = res.data.files || [];
-
-        
-        // return clean payload
-        return files.map(file => ({
-            id: file.id,
-            name: file.name,
-            mimeType: file.mimeType,
-            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
-            amount: 10,               // ⭐ your custom field
-            wholeFileObject: file,
-            actualResData: res.data
-        }));
-
-    } catch (err) {
-        console.error("Error fetching files:", err.message);
-        return [];
-    }
+    // return clean payload
+    return files.map((file) => ({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      url: `https://drive.google.com/uc?export=view&id=${file.id}`,
+      amount: 10, // ⭐ your custom field
+      wholeFileObject: file,
+      actualResData: res.data,
+    }));
+  } catch (err) {
+    console.error("Error fetching files:", err.message);
+    return [];
+  }
 };
 
 // import { google } from "googleapis";
@@ -64,7 +61,7 @@ export const getFilesInFolder = async (folderId) => {
 
 // /**
 //  * Fetch all file URLs inside a Google Drive folder
-//  * @param {string} folderId 
+//  * @param {string} folderId
 //  * @returns {Promise<{id: string, name: string, url: string}[]>}
 //  */
 // export const getFilesInFolder = async (folderId) => {
@@ -109,7 +106,7 @@ export const getFilesInFolder = async (folderId) => {
 
 // // /**
 // //  * Fetch all file URLs inside a Google Drive folder
-// //  * @param {string} folderId 
+// //  * @param {string} folderId
 // //  * @returns {Promise<string[]>} Array of public file URLs
 // //  */
 // // export const getFilesInFolder = async (folderId) => {
@@ -136,7 +133,6 @@ export const getFilesInFolder = async (folderId) => {
 // //     return [];
 // //   }
 // // };
-
 
 // // // import { google } from "googleapis";
 // // // import path from "path";
